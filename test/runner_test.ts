@@ -866,6 +866,24 @@ describe('Runner', () => {
     assert.ok(frame, 'Frame that the target page navigated to is not found');
   });
 
+  it.only('should be able to import steps from a local file', async () => {
+    const runner = await createRunner(
+      {
+        title: 'Test Recording',
+        steps: [
+          {
+            type: 'import',
+            from: 'file',
+            target: './test/resources/replay.json',
+          },
+        ],
+      },
+      new PuppeteerRunnerExtension(browser, page)
+    );
+
+    assert.isTrue(await runner.run());
+  });
+
   it('should replay hovers', async () => {
     const runner = await createRunner(
       {

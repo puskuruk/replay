@@ -14,9 +14,10 @@
     limitations under the License.
  */
 
+import { readFile } from 'fs/promises';
 import { PuppeteerRunnerOwningBrowserExtension } from './PuppeteerRunnerExtension.js';
 import { RunnerExtension } from './RunnerExtension.js';
-import { UserFlow } from './Schema.js';
+import { Step, UserFlow } from './Schema.js';
 
 export class Runner {
   #flow: UserFlow;
@@ -68,8 +69,64 @@ export class Runner {
   }
 }
 
+interface ImportSteps {
+  type: 'import';
+  from: 'file' | 'url';
+  target: string;
+}
+
+interface ExtandableUserFlow {
+  /**
+   * Human-readable title describing the recorder user flow.
+   */
+  title: string;
+  /**
+   * Timeout in milliseconds.
+   */
+  steps: (ImportSteps | Step)[];
+}
+
+async function importSteps(givenFlow: ExtandableUserFlow): Promise<UserFlow> {
+  const steps: Step[] = [];
+
+  for (const step of givenFlow.steps) {
+    if (step.type != 'import') {
+      steps.push(step);
+
+      continue;
+    }
+
+    const { from, target } = step;
+    switch (from) {
+      case 'file': {
+        try {
+          const file = await readFile(target, 'utf-8');
+          const jsonFile = JSON.parse(file);
+
+          if (!('steps' in jsonFile))
+            throw new Error(`No steps found in target: ${target}`);
+
+          steps.push(...jsonFile.steps);
+        } catch (error) {
+          throw new Error(`Error reading file: ${target}\n${error}`);
+        }
+
+        break;
+      }
+
+      default:
+        throw new Error(`Adding steps from "${from}" is not supported`);
+    }
+  }
+
+  return {
+    ...givenFlow,
+    steps,
+  };
+}
+
 export async function createRunner(
-  flow: UserFlow,
+  flow: UserFlow | ExtandableUserFlow,
   extension?: RunnerExtension
 ) {
   if (!extension) {
@@ -80,5 +137,9 @@ export async function createRunner(
     const page = await browser.newPage();
     extension = new PuppeteerRunnerOwningBrowserExtension(browser, page);
   }
-  return new Runner(flow, extension);
+
+  if (flow.steps.some((step) => step.type === 'import'))
+    flow = await importSteps(flow);
+
+  return new Runner(flow as UserFlow, extension);
 }
