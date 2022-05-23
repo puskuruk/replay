@@ -1,0 +1,23 @@
+name: Test matrix
+'on': pull_request
+
+jobs:
+  url_matrix:
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        url:
+          ['https://github.com', 'https://google.com', 'https://wikipedia.org']
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v2
+
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 18.0.0
+
+      - run: echo ${{ matrix.url }}
+
+      - run: npm i
+
+      - run: BASE_URL=${{ matrix.url }} npx @puppeteer/replay ./test/resources/replay.json
