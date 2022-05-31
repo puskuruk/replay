@@ -15,11 +15,11 @@
  */
 
 import { parse, createRunner } from './main.js';
-import { readFileSync } from 'fs';
-import { join, isAbsolute } from 'path';
+import { join, isAbsolute, extname } from 'path';
 import { pathToFileURL } from 'url';
 import { cwd } from 'process';
 import { PuppeteerRunnerOwningBrowserExtension } from './PuppeteerRunnerExtension.js';
+import { readFileSync, readdirSync, lstatSync } from 'fs';
 
 export function getHeadlessEnvVar(headless?: string) {
   if (!headless) {
@@ -37,6 +37,41 @@ export function getHeadlessEnvVar(headless?: string) {
     default:
       throw new Error('PUPPETEER_HEADLESS: unrecognized value');
   }
+}
+
+export function getJSONFilesFromFolder(path: string): string[] {
+  return readdirSync(path)
+    .filter((file) => extname(file) === '.json')
+    .map((file) => join(path, file));
+}
+
+export function getRecordingPaths(
+  paths: string[],
+  log: boolean = true
+): string[] {
+  const recordingPaths: string[] = [];
+
+  for (const path of paths) {
+    let isDirectory;
+    try {
+      isDirectory = lstatSync(path).isDirectory();
+    } catch (err) {
+      log && console.error(`Couldn't find file/folder: ${path}`, err);
+
+      continue;
+    }
+
+    if (isDirectory) {
+      const filesInFolder = getJSONFilesFromFolder(path);
+
+      if (!filesInFolder.length)
+        log && console.error(`There is no recordings in: ${path}`);
+
+      recordingPaths.push(...filesInFolder);
+    } else recordingPaths.push(path);
+  }
+
+  return recordingPaths;
 }
 
 export async function runFiles(

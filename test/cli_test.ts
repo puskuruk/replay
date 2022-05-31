@@ -14,7 +14,12 @@
     limitations under the License.
  */
 
-import { runFiles, getHeadlessEnvVar } from '../src/CLIUtils.js';
+import {
+  runFiles,
+  getHeadlessEnvVar,
+  getRecordingPaths,
+  getJSONFilesFromFolder,
+} from '../src/CLIUtils.js';
 import { assert } from 'chai';
 import path from 'path';
 import url from 'url';
@@ -50,6 +55,39 @@ describe('cli', () => {
           log: false,
         })
       );
+    });
+    it('is not able to run successfully', async () => {
+      assert.isFalse(
+        await runFiles([path.join(__dirname, 'resources', 'replay-fail.json')])
+      );
+    });
+
+    it('is able to run multiple files', async () => {
+      const recordings = getJSONFilesFromFolder(
+        path.join(__dirname, 'resources')
+      );
+
+      assert.isFalse(await runFiles([...recordings]));
+    });
+  });
+
+  describe('getRecordingPaths', () => {
+    it('is able to get recordings from a directory', () => {
+      const recordingsFolderPath = 'test/resources';
+      const recordingPaths = getRecordingPaths([recordingsFolderPath]);
+
+      assert.sameMembers(recordingPaths, [
+        `${recordingsFolderPath}/replay.json`,
+        `${recordingsFolderPath}/replay-fail.json`,
+      ]);
+    });
+  });
+
+  describe('getJSONFilesFromFolder', () => {
+    it('is able to return json files from a directory', () => {
+      const files = getJSONFilesFromFolder(path.join(__dirname, 'resources'));
+
+      assert.isTrue(files.every((file) => file.endsWith('.json')));
     });
   });
 });
