@@ -14,9 +14,10 @@
     limitations under the License.
  */
 
+import { readFileSync } from 'fs';
 import { PuppeteerRunnerOwningBrowserExtension } from './PuppeteerRunnerExtension.js';
 import { RunnerExtension } from './RunnerExtension.js';
-import { UserFlow } from './Schema.js';
+import { UserFlow, Step } from './Schema.js';
 
 export class Runner {
   #flow: UserFlow;
@@ -58,8 +59,64 @@ export class Runner {
   }
 }
 
+interface AddExternalStepsStep {
+  type: 'addExternalSteps';
+  from: 'file';
+  target: string;
+}
+
+interface ExtandableUserFlow {
+  /**
+   * Human-readable title describing the recorder user flow.
+   */
+  title: string;
+  steps: AddExternalStepsStep[];
+}
+
+async function extendRecordingWithExternalSteps(
+  givenFlow: ExtandableUserFlow | UserFlow
+): Promise<UserFlow> {
+  const steps: Step[] = [];
+  const givenSteps = givenFlow.steps;
+
+  for (const step of givenSteps) {
+    if (step.type != 'addExternalSteps') {
+      steps.push(step);
+
+      continue;
+    }
+
+    const { from, target } = step as AddExternalStepsStep;
+    switch (from) {
+      case 'file': {
+        try {
+          const file = readFileSync(target, 'utf-8');
+          const jsonFile = JSON.parse(file);
+
+          if (!('steps' in jsonFile))
+            throw new Error(`No steps found in ${from}: ${target}`);
+
+          steps.push(...jsonFile.steps);
+        } catch (error) {
+          throw new Error(`Couldn't read ${from}: ${target}\n${error}`);
+        }
+
+        break;
+      }
+
+      default:
+        throw new Error(`Extending recording with "${from}" is not supported`);
+    }
+  }
+
+  return {
+    ...givenFlow,
+    steps,
+  };
+}
+
 export async function createRunner(
-  flow: UserFlow,
+  flow: UserFlow | ExtandableUserFlow,
   extension?: RunnerExtension
 ) {
   if (!extension) {
@@ -70,5 +127,9 @@ export async function createRunner(
     const page = await browser.newPage();
     extension = new PuppeteerRunnerOwningBrowserExtension(browser, page);
   }
-  return new Runner(flow, extension);
+
+  if (flow.steps.some((step) => step.type === 'addExternalSteps'))
+    flow = await extendRecordingWithExternalSteps(flow);
+
+  return new Runner(flow as UserFlow, extension);
 }

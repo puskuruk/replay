@@ -18,6 +18,7 @@ import puppeteer from 'puppeteer';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { assert } from 'chai';
+import { readFileSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -98,6 +99,33 @@ describe('Runner', () => {
     const isFinished = await runner.run();
 
     assert.isTrue(isFinished);
+  });
+
+  it('should be able to import steps from a local file', async () => {
+    const recodingPath = path.join(__dirname, 'resources', 'replay.json');
+    const rawRecording = readFileSync(recodingPath, 'utf-8');
+    const recordingJSON = JSON.parse(rawRecording);
+    const { url } = recordingJSON.steps.find(
+      (step: any) => (step.type = 'navigate')
+    );
+
+    const runner = await createRunner(
+      {
+        title: 'Extendable Recording',
+        steps: [
+          {
+            type: 'addExternalSteps',
+            from: 'file',
+            target: recodingPath,
+          },
+        ],
+      },
+      new PuppeteerRunnerExtension(browser, page)
+    );
+
+    await runner.run();
+
+    assert.strictEqual(page.url(), url);
   });
 
   it('should navigate to the right URL', async () => {
